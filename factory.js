@@ -1,3 +1,6 @@
+const events = require('events');
+const Commander = require('./commander').Commander;
+
 function factory(express) {
     /*
         * A factory for creating Express instances
@@ -11,6 +14,18 @@ function factory(express) {
         this._express = e();
         this._routeMap = []; // { route: url, handler: callback (req, res, next) }
         this._mws = []; // a list of middleware; insertion order enforced
+        this._cmdListener = new events.EventEmitter()
+            .on('action', (action) => {
+                switch(action) {
+                    case 'shutdown':
+                        this._express = null;
+                        this._routeMap = null;
+                        this._mws = null;
+                        process.stdout.write('\nShutting down server....\n');
+                        process.exit(0);
+                }
+            });
+        this._cmdr = new Commander(this._cmdListener);
     }
     _express.prototype.addMiddleware = function(mw) {
         this._mws.push({
@@ -76,9 +91,13 @@ function factory(express) {
     _express.prototype.start = function(port=4200, startCb) {
         startCb = !!!startCb ? (() => {
             console.log('Express server started at port: ' + port);
+            process.stdin.pipe(this._cmdr._cmdStream, { end: false });
         }) : startCb;
         this._express.listen(port, startCb);
     };
+    _express.prototype.testFn = function() {
+        process.stdout.write("testFn was run ok\n");
+    }
     return new _express(express);
 }
 
